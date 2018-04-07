@@ -1,6 +1,10 @@
+import warnings
+
+from pyquil.wavefunction import Wavefunction
+
 from pyquil.api import Job
 from pyquil.api._base_connection import get_session, wait_for_job, TYPE_EXPECTATION, get_json, \
-    post_json, get_job_id
+    post_json, get_job_id, Connection, validate_run_items, TYPE_WAVEFUNCTION
 from six import integer_types
 from pyquil import Program
 
@@ -37,13 +41,9 @@ class WavefunctionSimulator:
         :param random_seed: A seed for the QVM's random number generators. Either None (for an
                             automatically generated seed) or a non-negative integer.
         """
-        self.async_endpoint = async_endpoint
-        self.sync_endpoint = sync_endpoint
-        self.session = get_session(api_key, user_id)
-
-        self.use_queue = use_queue
-        self.ping_time = ping_time
-        self.status_time = status_time
+        self.connection = Connection(sync_endpoint=sync_endpoint, async_endpoint=async_endpoint,
+                                     api_key=api_key, user_id=user_id, use_queue=use_queue,
+                                     ping_time=ping_time, status_time=status_time)
 
         if random_seed is None:
             self.random_seed = None
@@ -75,21 +75,25 @@ class WavefunctionSimulator:
         if classical_addresses is None:
             classical_addresses = []
 
-        if self.use_queue or needs_compilation:
-            if needs_compilation and not self.use_queue:
+        if self.connection.use_queue or needs_compilation:
+            if needs_compilation and not self.connection.use_queue:
                 warnings.warn(
-                    'Synchronous QVM connection does not support compilation preprocessing. Running this job over the asynchronous endpoint, as if use_queue were set to True.')
+                    'Synchronous connection does not support compilation preprocessing. '
+                    'Running this job over the asynchronous endpoint, as if use_queue were set to True.')
 
             payload = self._wavefunction_payload(quil_program, classical_addresses,
                                                  needs_compilation, isa)
-            response = post_json(self.session, self.async_endpoint + "/job",
+
+            # TODO: Method on connection
+            response = post_json(self.connection.session, self.connection.async_endpoint + "/job",
                                  {"machine": "QVM", "program": payload})
             job = self.wait_for_job(get_job_id(response))
             return job.result()
         else:
             payload = self._wavefunction_payload(quil_program, classical_addresses,
                                                  needs_compilation, isa)
-            response = post_json(self.session, self.sync_endpoint + "/qvm", payload)
+            # TODO: Method on connection
+            response = post_json(self.connection.session, self.connection.sync_endpoint + "/qvm", payload)
             return Wavefunction.from_bit_packed_string(response.content, classical_addresses)
 
     def wavefunction_async(self, quil_program, classical_addresses=None, needs_compilation=False,
@@ -103,7 +107,9 @@ class WavefunctionSimulator:
 
         payload = self._wavefunction_payload(quil_program, classical_addresses, needs_compilation,
                                              isa)
-        response = post_json(self.session, self.async_endpoint + "/job",
+
+        # TODO: Method on connection
+        response = post_json(self.connection.session, self.connection.async_endpoint + "/job",
                              {"machine": "QVM", "program": payload})
         return get_job_id(response)
 
@@ -190,6 +196,7 @@ class WavefunctionSimulator:
 
         return payload
 
+    # TODO: Move to Connection
     def get_job(self, job_id):
         """
         Given a job id, return information about the status of the job
@@ -198,9 +205,10 @@ class WavefunctionSimulator:
         :return: Job object with the status and potentially results of the job
         :rtype: Job
         """
-        response = get_json(self.session, self.async_endpoint + "/job/" + job_id)
+        response = get_json(self.connection.session, self.connection.async_endpoint + "/job/" + job_id)
         return Job(response.json(), 'QVM')
 
+    # TODO: Move to Connection
     def wait_for_job(self, job_id, ping_time=None, status_time=None):
         """
         Wait for the results of a job and periodically print status
@@ -217,8 +225,17 @@ class WavefunctionSimulator:
             return self.get_job(job_id)
 
         return wait_for_job(get_job_fn,
-                            ping_time if ping_time else self.ping_time,
-                            status_time if status_time else self.status_time)
+                            ping_time if ping_time else self.connection.ping_time,
+                            status_time if status_time else self.connection.status_time)
+
+    def _maybe_add_noise_to_payload(self, payload):
+        """
+        Set the gate noise and measurement noise of a payload.
+        """
+        if self.measurement_noise is not None:
+            payload["measurement-noise"] = self.measurement_noise
+        if self.gate_noise is not None:
+            payload["gate-noise"] = self.gate_noise
 
     def _add_rng_seed_to_payload(self, payload):
         """

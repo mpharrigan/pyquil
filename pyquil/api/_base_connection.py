@@ -180,3 +180,43 @@ def validate_run_items(run_items):
 
 def get_job_id(response):
     return response.json()['jobId']
+
+class Connection:
+    def __init__(self, sync_endpoint='https://api.rigetti.com',
+                 async_endpoint='https://job.rigetti.com/beta', api_key=None, user_id=None,
+                 use_queue=False, ping_time=0.1, status_time=2):
+        """
+        Constructor for QVMConnection. Sets up any necessary security, and establishes the noise
+        model to use.
+
+        :param Device device: The optional device, from which noise will be added by default to all
+                              programs run on this instance.
+        :param sync_endpoint: The endpoint of the server for running small jobs
+        :param async_endpoint: The endpoint of the server for running large jobs
+        :param api_key: The key to the Forest API Gateway (default behavior is to read from config file)
+        :param user_id: Your userid for Forest (default behavior is to read from config file)
+        :param bool use_queue: Disabling this parameter may improve performance for small, quick programs.
+                               To support larger programs, set it to True. (default: False)
+                               *_async methods will always use the queue
+                               See https://go.rigetti.com/connections for more information.
+        :param int ping_time: Time in seconds for how long to wait between polling the server for updated status
+                              information on a job. Note that this parameter doesn't matter if use_queue is False.
+        :param int status_time: Time in seconds for how long to wait between printing status information.
+                                To disable printing of status entirely then set status_time to False.
+                                Note that this parameter doesn't matter if use_queue is False.
+        :param gate_noise: A list of three numbers [Px, Py, Pz] indicating the probability of an X,
+                           Y, or Z gate getting applied to each qubit after a gate application or
+                           reset. (default None)
+        :param measurement_noise: A list of three numbers [Px, Py, Pz] indicating the probability of
+                                  an X, Y, or Z gate getting applied before a a measurement.
+                                  (default None)
+        :param random_seed: A seed for the QVM's random number generators. Either None (for an
+                            automatically generated seed) or a non-negative integer.
+        """
+        self.async_endpoint = async_endpoint
+        self.sync_endpoint = sync_endpoint
+        self.session = get_session(api_key, user_id)
+
+        self.use_queue = use_queue
+        self.ping_time = ping_time
+        self.status_time = status_time
