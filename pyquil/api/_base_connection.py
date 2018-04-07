@@ -18,12 +18,14 @@ from __future__ import print_function
 
 import re
 import time
+import warnings
 
 import requests
 from requests.adapters import HTTPAdapter
 from six import integer_types
 from urllib3 import Retry
 
+from pyquil.api import Job
 from pyquil.api.errors import error_mapping, UnknownApiError, TooManyQubitsError
 from ._config import PyquilConfig
 
@@ -220,3 +222,48 @@ class Connection:
         self.use_queue = use_queue
         self.ping_time = ping_time
         self.status_time = status_time
+
+    def use_queue_or_needs_compilation(self, payload, *, needs_compilation):
+        if needs_compilation and not self.use_queue:
+            warnings.warn('Synchronous QVM connection does not support compilation preprocessing. Running this job over the asynchronous endpoint, as if use_queue were set to True.')
+
+        response = post_json(self.session, self.async_endpoint + "/job", {"machine": "QVM", "program": payload})
+        job = self.wait_for_job(get_job_id(response))
+        return job.result()
+
+    def run_helper(self, payload):
+        response = post_json(self.session, self.sync_endpoint + "/qvm", payload)
+        return response.json()
+
+    def run_async_helper(self, payload):
+        response = post_json(self.session, self.async_endpoint + "/job", {"machine": "QVM", "program": payload})
+        return get_job_id(response)
+
+    def wait_for_job(self, job_id, ping_time=None, status_time=None):
+        """
+        Wait for the results of a job and periodically print status
+
+        :param job_id: Job id
+        :param ping_time: How often to poll the server.
+                          Defaults to the value specified in the constructor. (0.1 seconds)
+        :param status_time: How often to print status, set to False to never print status.
+                            Defaults to the value specified in the constructor (2 seconds)
+        :return: Completed Job
+        """
+        def get_job_fn():
+            return self.get_job(job_id)
+        return wait_for_job(get_job_fn,
+                            ping_time if ping_time else self.ping_time,
+                            status_time if status_time else self.status_time)
+
+
+    def get_job(self, job_id):
+        """
+        Given a job id, return information about the status of the job
+
+        :param str job_id: job id
+        :return: Job object with the status and potentially results of the job
+        :rtype: Job
+        """
+        response = get_json(self.session, self.async_endpoint + "/job/" + job_id)
+        return Job(response.json(), 'QVM')
