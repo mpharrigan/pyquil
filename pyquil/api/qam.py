@@ -28,11 +28,15 @@ class QAM:
         if needs_compilation is None:
             needs_compilation = self.compile_by_default
 
-        payload = self._run_payload(quil_program, classical_addresses, trials, needs_compilation, isa)
+        if needs_compilation:
+            # TODO: actually compile this.
+            quil_program = compile(quil_program)
+
+        payload = self._run_payload(quil_program, classical_addresses, trials, isa)
         payload = self._wrap_payload(payload)
         return self.connection.run_async_helper(payload)
 
-    def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+    def _run_payload(self, quil_program, classical_addresses, trials, isa):
         raise NotImplementedError()
 
     def _wrap_payload(self, program):
@@ -105,17 +109,12 @@ class QVM(QAM):
 
 
 
-    def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+    def _run_payload(self, quil_program, classical_addresses, trials, isa):
         if not isinstance(quil_program, Program):
             raise TypeError("quil_program must be a Quil program object")
         validate_run_items(classical_addresses)
         if not isinstance(trials, integer_types):
             raise TypeError("trials must be an integer")
-        if needs_compilation and not isa:
-            raise TypeError("ISA cannot be None if program needs compilation preprocessing.")
-
-        # TODO
-        assert not needs_compilation
 
         if self.qubit_topology is not None:
             self._check_respects_topology(quil_program)
@@ -211,28 +210,21 @@ class QPU(QAM):
         return {
             "machine": "QPU",
             "program": program,
-            "device": self.device_name
+            "device": self.name,
         }
 
-    def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+    def _run_payload(self, quil_program, classical_addresses, trials, isa):
         if not isinstance(quil_program, Program):
             raise TypeError("quil_program must be a Quil program object")
         validate_run_items(classical_addresses)
         if not isinstance(trials, integer_types):
             raise TypeError("trials must be an integer")
 
-        payload = {"type": TYPE_MULTISHOT,
-                   "addresses": list(classical_addresses),
-                   "trials": trials}
+        return {"type": TYPE_MULTISHOT,
+                "addresses": list(classical_addresses),
+                "trials": trials,
+                "compiled-quil": quil_program.out()}
 
-        if needs_compilation:
-            payload["uncompiled-quil"] = quil_program.out()
-            if isa:
-                payload["target-device"] = {"isa": isa.to_dict()}
-        else:
-            payload["compiled-quil"] = quil_program.out()
-
-        return payload
 
 def get_qpu(name, connection=None):
     if connection is None:
