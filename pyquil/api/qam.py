@@ -5,8 +5,10 @@ from six import integer_types
 
 from pyquil import Program
 from pyquil.api._base_connection import Connection, validate_run_items, TYPE_MULTISHOT
+from pyquil.api.errors import QVMError
 from pyquil.device import ISA
 from pyquil.noise import apply_noise_model
+from pyquil.quilbase import Gate
 
 
 class QAM:
@@ -73,14 +75,35 @@ class QAM:
 
 class QVM(QAM):
 
-    def __init__(self):
-        pass
+    def __init__(self, name, qubit_topology:nx.Graph, supported_gates, connection=None):
+        self.name=name
+        self.qubit_topology = qubit_topology
+        self.supported_gates = supported_gates
+        self.compile_by_default=False
+        super().__init__(connection=connection)
 
     def _wrap_payload(self, program):
         return {
             "machine": "QVM",
             "program": program,
         }
+
+    def _check_respects_topology(self, program: Program):
+        for inst in program:
+            if hasattr(inst, 'qubits'):
+                qubits = [q.index for q in inst.qubits]
+                if len(qubits) == 0:
+                    pass
+                elif len(qubits) == 1:
+                    q = qubits[0]
+                    if not q in self.qubit_topology.nodes:
+                        raise QVMError(f"The qubit {q} is not in the emulated qubit topology for {self.name}")
+                elif len(qubits) == 2:
+                    if not tuple(qubits) in self.qubit_topology.edges:
+                        raise QVMError(f"The qubit pair {qubits} is not in the emulated qubit topology for {self.name}")
+
+
+
 
     def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
         if not isinstance(quil_program, Program):
@@ -91,21 +114,26 @@ class QVM(QAM):
         if needs_compilation and not isa:
             raise TypeError("ISA cannot be None if program needs compilation preprocessing.")
 
-        if self.noise_model is not None:
-            compiled_program = self.compiler.compile(quil_program)
-            quil_program = apply_noise_model(compiled_program, self.noise_model)
+        # TODO
+        assert not needs_compilation
+
+        if self.qubit_topology is not None:
+            self._check_respects_topology(quil_program)
+
+
+        # TODO Noise model
+        # if self.noise_model is not None:
+        #     compiled_program = self.compiler.compile(quil_program)
+        #     quil_program = apply_noise_model(compiled_program, self.noise_model)
 
         payload = {"type": TYPE_MULTISHOT,
                    "addresses": list(classical_addresses),
                    "trials": trials}
-        if needs_compilation:
-            payload["uncompiled-quil"] = quil_program.out()
-            payload["target-device"] = {"isa": isa.to_dict()}
-        else:
-            payload["compiled-quil"] = quil_program.out()
 
-        self._maybe_add_noise_to_payload(payload)
-        self._add_rng_seed_to_payload(payload)
+        payload["compiled-quil"] = quil_program.out()
+
+        # self._maybe_add_noise_to_payload(payload)
+        # self._add_rng_seed_to_payload(payload)
 
         return payload
 
@@ -119,39 +147,56 @@ class QVM(QAM):
             payload["gate-noise"] = self.gate_noise
 
 
-def get_qvm(*, imitate='acorn', restrict_lattice=True, restrict_gateset=True, noncontiguous_qubits=True, with_noise=True):
-    if restrict_lattice:
+def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
+            noncontiguous_qubits=False, with_noise=False, connection=None):
+    modifier_str = ''
+    if restrict_topology:
         if imitate is not None:
-            lattice = qpu_topology
+            raise NotImplementedError
         else:
-            lattice = nx.grid_2d_graph(5,5)
+            topo = nx.convert_node_labels_to_integers(nx.grid_2d_graph(5, 5))
+
+        modifier_str += 't'
     else:
-        lattice = nx.complete_graph(25)
+        topo = nx.complete_graph(25)
 
     if restrict_gateset:
         if imitate is not None:
-            pass
+            raise NotImplementedError
         else:
-            pass
+            gateset = ['CZ']
+
+        modifier_str += 'g'
     else:
-        pass
+        gateset = None
 
     if noncontiguous_qubits:
         if imitate is not None:
             if imitate not in ['19Q-Acorn']:
                 warnings.warn("won't actually have noncontiguous qubits")
-            qubits = qpu_qubits
+            raise NotImplementedError
         else:
-            qubits = [2*i for i in range(n_qubits)]
+            mapping = {i: 2 * i for i in topo.nodes}
+            topo = nx.relabel_nodes(topo, mapping)
+
+        modifier_str += 'q'
     else:
-        qubits = None
-
-
-    if with_noise:
         pass
 
+    if with_noise:
+        raise NotImplementedError
 
-    return QVM()
+    name_parts = []
+    if imitate is not None:
+        name_parts += [str(imitate)]
+
+    if len(modifier_str) > 0:
+        name_parts += [modifier_str]
+
+    name_parts += ['qvm']
+    name = '-'.join(name_parts)
+
+    return QVM(name=name, qubit_topology=topo, supported_gates=gateset, connection=connection)
 
 
 class QPU(QAM):
@@ -159,6 +204,7 @@ class QPU(QAM):
     def __init__(self, name, qubit_topology, connection=None):
         self.name = name
         self.qubit_topology = qubit_topology
+        self.compile_by_default = True
         super().__init__(connection=connection)
 
     def _wrap_payload(self, program):
