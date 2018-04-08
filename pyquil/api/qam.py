@@ -247,5 +247,3 @@ def get_qpu(name, connection=None):
     isa = ISA.from_dict(device['isa'])
     topo = isa.topology()
     return QPU(name=name, qubit_topology=topo, connection=connection)
-
-get_qpu('19Q-Acorn')
