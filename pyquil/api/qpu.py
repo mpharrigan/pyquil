@@ -21,9 +21,9 @@ from pyquil.api.job import Job
 from pyquil.device import Device
 from pyquil.gates import MEASURE
 from pyquil.quil import Program
-from ._base_connection import (validate_run_items, TYPE_MULTISHOT, TYPE_MULTISHOT_MEASURE,
+from pyquil.api._base_connection import (validate_run_items, TYPE_MULTISHOT, TYPE_MULTISHOT_MEASURE,
                                get_job_id, get_session, wait_for_job, post_json, get_json,
-                               parse_error)
+                               parse_error, Connection)
 
 
 def get_devices(async_endpoint='https://job.rigetti.com/beta', api_key=None, user_id=None,
@@ -55,6 +55,14 @@ will become the default behavior in a future pyQuil release.
         return {Device(name, device) for (name, device) in response.json()['devices'].items()}
 
     return {name: Device(name, device) for (name, device) in response.json()['devices'].items()}
+
+def list_devices(connection=None):
+    # TODO: Rename. No "device"
+    if connection is None:
+        connection = Connection()
+
+    device_names = connection.get_devices().json()['devices'].keys()
+    return sorted(device_names)
 
 
 def append_measures_to_program(gate_program, qubits):

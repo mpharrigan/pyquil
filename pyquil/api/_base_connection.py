@@ -267,3 +267,9 @@ class Connection:
         """
         response = get_json(self.session, self.async_endpoint + "/job/" + job_id)
         return Job(response.json(), 'QVM')
+
+
+    def get_devices(self):
+        # TODO: rename (no "device"s)
+        response = get_json(self.session, self.async_endpoint + '/devices')
+        return response
