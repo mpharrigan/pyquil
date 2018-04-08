@@ -15,6 +15,8 @@
 ##############################################################################
 from collections import namedtuple
 from typing import Union
+
+import networkx as nx
 import numpy as np
 
 from pyquil.parameters import Parameter
@@ -119,6 +121,9 @@ class ISA(_ISA):
                           for eid, e in d["2Q"].items()],
                          key=lambda edge: edge.targets),
         )
+
+    def topology(self):
+        return nx.from_edgelist(e.targets for e in self.edges)
 
 
 def gates_in_isa(isa):

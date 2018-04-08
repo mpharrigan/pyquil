@@ -1,7 +1,11 @@
+import warnings
+
+import networkx as nx
 from six import integer_types
 
 from pyquil import Program
 from pyquil.api._base_connection import Connection, validate_run_items, TYPE_MULTISHOT
+from pyquil.device import ISA
 from pyquil.noise import apply_noise_model
 
 
@@ -115,10 +119,47 @@ class QVM(QAM):
             payload["gate-noise"] = self.gate_noise
 
 
+def get_qvm(*, imitate='acorn', restrict_lattice=True, restrict_gateset=True, noncontiguous_qubits=True, with_noise=True):
+    if restrict_lattice:
+        if imitate is not None:
+            lattice = qpu_topology
+        else:
+            lattice = nx.grid_2d_graph(5,5)
+    else:
+        lattice = nx.complete_graph(25)
+
+    if restrict_gateset:
+        if imitate is not None:
+            pass
+        else:
+            pass
+    else:
+        pass
+
+    if noncontiguous_qubits:
+        if imitate is not None:
+            if imitate not in ['19Q-Acorn']:
+                warnings.warn("won't actually have noncontiguous qubits")
+            qubits = qpu_qubits
+        else:
+            qubits = [2*i for i in range(n_qubits)]
+    else:
+        qubits = None
+
+
+    if with_noise:
+        pass
+
+
+    return QVM()
+
+
 class QPU(QAM):
 
-    def __init__(self, device_name):
-        pass
+    def __init__(self, name, qubit_topology, connection=None):
+        self.name = name
+        self.qubit_topology = qubit_topology
+        super().__init__(connection=connection)
 
     def _wrap_payload(self, program):
         return {
@@ -146,3 +187,19 @@ class QPU(QAM):
             payload["compiled-quil"] = quil_program.out()
 
         return payload
+
+def get_qpu(name, connection=None):
+    if connection is None:
+        connection = Connection()
+
+    devices = connection.get_devices().json()['devices']
+    try:
+        device = devices[name]
+    except KeyError:
+        raise KeyError(f"The device named {name} does not exist or is not available.")
+
+    isa = ISA.from_dict(device['isa'])
+    topo = isa.topology()
+    return QPU(name=name, qubit_topology=topo, connection=connection)
+
+get_qpu('19Q-Acorn')
