@@ -56,8 +56,7 @@ will become the default behavior in a future pyQuil release.
 
     return {name: Device(name, device) for (name, device) in response.json()['devices'].items()}
 
-def list_devices(connection=None):
-    # TODO: Rename. No "device"
+def list_qpus(connection=None):
     if connection is None:
         connection = Connection()
 

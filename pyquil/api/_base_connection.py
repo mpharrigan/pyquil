@@ -270,6 +270,5 @@ class Connection:
 
 
     def get_devices(self):
-        # TODO: rename (no "device"s)
         response = get_json(self.session, self.async_endpoint + '/devices')
         return response
