@@ -89,7 +89,8 @@ class QAM:
         :return: A list of a list of classical registers (each register contains a bit)
         :rtype: list
         """
-        job = self.wait_for_job(self.run_async(quil_program, classical_addresses, trials, needs_compilation, isa))
+        job_id = self.run_async(quil_program, classical_addresses, trials, needs_compilation, isa)
+        job = self.connection.wait_for_job(job_id)
         return job.result()
 
 
@@ -145,35 +146,6 @@ class QAM:
         return payload
 
 
-    def qpu_get_job(self, job_id):
-        """
-        Given a job id, return information about the status of the job
-
-        :param str job_id: job id
-        :return: Job object with the status and potentially results of the job
-        :rtype: Job
-        """
-        response = get_json(self.session, self.async_endpoint + "/job/" + job_id)
-        return Job(response.json(), 'QPU')
-
-    def qpu_wait_for_job(self, job_id, ping_time=None, status_time=None):
-        """
-        Wait for the results of a job and periodically print status
-
-        :param job_id: Job id
-        :param ping_time: How often to poll the server.
-                          Defaults to the value specified in the constructor. (0.1 seconds)
-        :param status_time: How often to print status, set to False to never print status.
-                            Defaults to the value specified in the constructor (2 seconds)
-        :return: Completed Job
-        """
-        def get_job_fn():
-            return self.get_job(job_id)
-        return wait_for_job(get_job_fn,
-                            ping_time if ping_time else self.ping_time,
-                            status_time if status_time else self.status_time)
-
-
 class QVM(QAM):
     def _wrap_payload(self, program):
         return {
@@ -226,7 +198,7 @@ class QPU(QAM):
             "device": self.device_name
         }
 
-    def qpu_run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+    def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
         if not isinstance(quil_program, Program):
             raise TypeError("quil_program must be a Quil program object")
         validate_run_items(classical_addresses)
