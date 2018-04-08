@@ -236,7 +236,7 @@ class Connection:
         return response.json()
 
     def run_async_helper(self, payload):
-        response = post_json(self.session, self.async_endpoint + "/job", {"machine": "QVM", "program": payload})
+        response = post_json(self.session, self.async_endpoint + "/job", payload)
         return get_job_id(response)
 
     def wait_for_job(self, job_id, ping_time=None, status_time=None):

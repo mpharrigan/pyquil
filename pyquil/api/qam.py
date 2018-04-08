@@ -11,11 +11,15 @@ class QAM:
     """
     def __init__(self, connection=None):
         if connection is None:
-
             self.connection = Connection()
 
+        self.is_qpu = False # TODO
+        self.is_qvm = True # TODO
 
-    def run(self, quil_program, classical_addresses, trials=1, needs_compilation=False, isa=None):
+        self.compile_by_default = True if self.is_qpu else False
+
+
+    def run(self, quil_program, classical_addresses, trials=1, needs_compilation=None, isa=None):
         """
         Run a Quil program multiple times, accumulating the values deposited in
         a list of classical addresses.
@@ -29,55 +33,33 @@ class QAM:
                  in `classical_addresses`.
         :rtype: list
         """
+        if needs_compilation is None:
+            needs_compilation = self.compile_by_default
+
         payload = self._run_payload(quil_program, classical_addresses, trials, needs_compilation, isa)
         if self.connection.use_queue or needs_compilation:
             return self.connection.use_queue_or_needs_compilation(payload, needs_compilation=needs_compilation)
         else:
             return self.connection.run_helper(payload)
 
-    def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=False, isa=None):
+    def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=None, isa=None):
         """
         Similar to run except that it returns a job id and doesn't wait for the program to be executed.
         See https://go.rigetti.com/connections for reasons to use this method.
         """
+        if needs_compilation is None:
+            needs_compilation = self.compile_by_default
+
         payload = self._run_payload(quil_program, classical_addresses, trials, needs_compilation, isa)
+        payload = self._wrap_payload(payload)
         return self.connection.run_async_helper(payload)
 
     def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
-        if not isinstance(quil_program, Program):
-            raise TypeError("quil_program must be a Quil program object")
-        validate_run_items(classical_addresses)
-        if not isinstance(trials, integer_types):
-            raise TypeError("trials must be an integer")
-        if needs_compilation and not isa:
-            raise TypeError("ISA cannot be None if program needs compilation preprocessing.")
+        raise NotImplementedError()
 
-        if self.noise_model is not None:
-            compiled_program = self.compiler.compile(quil_program)
-            quil_program = apply_noise_model(compiled_program, self.noise_model)
+    def _wrap_payload(self, program):
+        raise NotImplementedError()
 
-        payload = {"type": TYPE_MULTISHOT,
-                   "addresses": list(classical_addresses),
-                   "trials": trials}
-        if needs_compilation:
-            payload["uncompiled-quil"] = quil_program.out()
-            payload["target-device"] = {"isa": isa.to_dict()}
-        else:
-            payload["compiled-quil"] = quil_program.out()
-
-        self._maybe_add_noise_to_payload(payload)
-        self._add_rng_seed_to_payload(payload)
-
-        return payload
-
-    def _maybe_add_noise_to_payload(self, payload):
-        """
-        Set the gate noise and measurement noise of a payload.
-        """
-        if self.measurement_noise is not None:
-            payload["measurement-noise"] = self.measurement_noise
-        if self.gate_noise is not None:
-            payload["gate-noise"] = self.gate_noise
 
     def _add_rng_seed_to_payload(self, payload):
         """
@@ -110,34 +92,7 @@ class QAM:
         job = self.wait_for_job(self.run_async(quil_program, classical_addresses, trials, needs_compilation, isa))
         return job.result()
 
-    def qpu_run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=True, isa=None):
-        """
-        Similar to run except that it returns a job id and doesn't wait for the program to
-        be executed. See https://go.rigetti.com/connections for reasons to use this method.
-        """
-        payload = self._run_payload(quil_program, classical_addresses, trials, needs_compilation=needs_compilation, isa=isa)
-        response = post_json(self.session, self.async_endpoint + "/job", self._wrap_program(payload))
-        return get_job_id(response)
 
-    def qpu_run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
-        if not isinstance(quil_program, Program):
-            raise TypeError("quil_program must be a Quil program object")
-        validate_run_items(classical_addresses)
-        if not isinstance(trials, integer_types):
-            raise TypeError("trials must be an integer")
-
-        payload = {"type": TYPE_MULTISHOT,
-                   "addresses": list(classical_addresses),
-                   "trials": trials}
-
-        if needs_compilation:
-            payload["uncompiled-quil"] = quil_program.out()
-            if isa:
-                payload["target-device"] = {"isa": isa.to_dict()}
-        else:
-            payload["compiled-quil"] = quil_program.out()
-
-        return payload
 
     def qpu_run_and_measure(self, quil_program, qubits, trials=1, needs_compilation=True, isa=None):
         """
@@ -218,9 +173,75 @@ class QAM:
                             ping_time if ping_time else self.ping_time,
                             status_time if status_time else self.status_time)
 
-    def qpu_wrap_program(self, program):
+
+class QVM(QAM):
+    def _wrap_payload(self, program):
+        return {
+            "machine": "QVM",
+            "program": program,
+        }
+
+    def _run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+        if not isinstance(quil_program, Program):
+            raise TypeError("quil_program must be a Quil program object")
+        validate_run_items(classical_addresses)
+        if not isinstance(trials, integer_types):
+            raise TypeError("trials must be an integer")
+        if needs_compilation and not isa:
+            raise TypeError("ISA cannot be None if program needs compilation preprocessing.")
+
+        if self.noise_model is not None:
+            compiled_program = self.compiler.compile(quil_program)
+            quil_program = apply_noise_model(compiled_program, self.noise_model)
+
+        payload = {"type": TYPE_MULTISHOT,
+                   "addresses": list(classical_addresses),
+                   "trials": trials}
+        if needs_compilation:
+            payload["uncompiled-quil"] = quil_program.out()
+            payload["target-device"] = {"isa": isa.to_dict()}
+        else:
+            payload["compiled-quil"] = quil_program.out()
+
+        self._maybe_add_noise_to_payload(payload)
+        self._add_rng_seed_to_payload(payload)
+
+        return payload
+
+    def _maybe_add_noise_to_payload(self, payload):
+        """
+        Set the gate noise and measurement noise of a payload.
+        """
+        if self.measurement_noise is not None:
+            payload["measurement-noise"] = self.measurement_noise
+        if self.gate_noise is not None:
+            payload["gate-noise"] = self.gate_noise
+
+
+class QPU(QAM):
+    def _wrap_payload(self, program):
         return {
             "machine": "QPU",
             "program": program,
             "device": self.device_name
         }
+
+    def qpu_run_payload(self, quil_program, classical_addresses, trials, needs_compilation, isa):
+        if not isinstance(quil_program, Program):
+            raise TypeError("quil_program must be a Quil program object")
+        validate_run_items(classical_addresses)
+        if not isinstance(trials, integer_types):
+            raise TypeError("trials must be an integer")
+
+        payload = {"type": TYPE_MULTISHOT,
+                   "addresses": list(classical_addresses),
+                   "trials": trials}
+
+        if needs_compilation:
+            payload["uncompiled-quil"] = quil_program.out()
+            if isa:
+                payload["target-device"] = {"isa": isa.to_dict()}
+        else:
+            payload["compiled-quil"] = quil_program.out()
+
+        return payload
