@@ -17,7 +17,9 @@ class QAM:
     """
     def __init__(self, connection=None):
         if connection is None:
-            self.connection = Connection()
+            connection = Connection()
+
+        self.connection = connection
 
 
     def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=None, isa=None):

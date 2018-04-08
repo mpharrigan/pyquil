@@ -3,7 +3,7 @@ import pytest
 
 from pyquil import Program
 from pyquil.api.errors import QVMError
-from pyquil.api.qam import get_qvm
+from pyquil.api.qam import get_qvm, get_qpu
 from pyquil.gates import *
 from pyquil.quil import address_qubits
 from pyquil.quilatom import QubitPlaceholder
@@ -81,3 +81,22 @@ def test_noncontiguous_fails2():
         bitstrings = qvm.run(bell, [0, 1], 100)
 
     assert e.match(r'The qubit 1 is not in the emulated qubit topology for q-qvm.*')
+
+
+def test_qpu():
+    qs = QubitPlaceholder.register(2)
+    program = Program([
+        H(qs[0]),
+        H(qs[1]),
+        CZ(qs[0], qs[1]),
+        MEASURE(qs[0], 0),
+        MEASURE(qs[1], 1),
+    ])
+    program = address_qubits(program, {
+        qs[0]: 13,
+        qs[1]: 19,
+    })
+    qpu = get_qpu('19Q-Acorn')
+    bitstrings = qpu.run(program, [0, 1], 100, needs_compilation=False)
+    print(bitstrings)
+    assert len(bitstrings) == 100
