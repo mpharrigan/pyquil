@@ -11,15 +11,16 @@ from pyquil.noise import apply_noise_model
 from pyquil.quilbase import Gate
 
 
-class QAM:
+class QuantumComputer:
     """
-    Represents a connection to the QPU (Quantum Processing Unit)
+    Represents an abstract quantum computer
     """
     def __init__(self, connection=None):
         if connection is None:
             connection = Connection()
 
         self.connection = connection
+        self.compile_by_default = NotImplemented
 
 
     def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=None, isa=None):
@@ -79,7 +80,7 @@ class QAM:
 
 
 
-class QVM(QAM):
+class QVM(QuantumComputer):
 
     def __init__(self, name, qubit_topology:nx.Graph, supported_gates, connection=None):
         self.name=name
@@ -200,7 +201,7 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
     return QVM(name=name, qubit_topology=topo, supported_gates=gateset, connection=connection)
 
 
-class QPU(QAM):
+class QPU(QuantumComputer):
 
     def __init__(self, name, qubit_topology, connection=None):
         self.name = name
