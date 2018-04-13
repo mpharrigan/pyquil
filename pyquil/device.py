@@ -32,8 +32,8 @@ DEFAULT_EDGE_TYPE = "CZ"
 Qubit = namedtuple("Qubit", ["id", "type", "dead"])
 Edge = namedtuple("Edge", ["targets", "type", "dead"])
 _ISA = namedtuple("_ISA", ["qubits", "edges"])
-QubitSpecs = namedtuple("_QubitSpecs", ["id", "fRO", "f1QRB", "T1", "T2"])
-EdgeSpecs = namedtuple("_QubitQubitSpecs", ["targets", "fBellState", "fCZ", "fCPHASE"])
+QubitSpecs = namedtuple("QubitSpecs", ["id", "fRO", "f1QRB", "T1", "T2"])
+EdgeSpecs = namedtuple("EdgeSpecs", ["targets", "fBellState", "fCZ", "fCPHASE"])
 _Specs = namedtuple("_Specs", ["qubits_specs", "edges_specs"])
 
 
