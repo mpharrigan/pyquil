@@ -6,7 +6,7 @@ from six import integer_types
 from pyquil import Program
 from pyquil.api._base_connection import Connection, validate_run_items, TYPE_MULTISHOT
 from pyquil.api.errors import QVMError
-from pyquil.device import ISA
+from pyquil.device import ISA, isa_from_graph
 from pyquil.noise import apply_noise_model
 from pyquil.quilbase import Gate
 
@@ -15,6 +15,7 @@ class QuantumComputer:
     """
     Represents an abstract quantum computer
     """
+
     def __init__(self, connection=None):
         if connection is None:
             connection = Connection()
@@ -22,8 +23,8 @@ class QuantumComputer:
         self.connection = connection
         self.compile_by_default = NotImplemented
 
-
-    def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=None, isa=None):
+    def run_async(self, quil_program, classical_addresses, trials=1, needs_compilation=None,
+                  isa=None):
         """
         Similar to run except that it returns a job id and doesn't wait for the program to be executed.
         See https://go.rigetti.com/connections for reasons to use this method.
@@ -44,7 +45,6 @@ class QuantumComputer:
 
     def _wrap_payload(self, program):
         raise NotImplementedError()
-
 
     def _add_rng_seed_to_payload(self, payload):
         """
@@ -79,14 +79,13 @@ class QuantumComputer:
         return job.result()
 
 
-
 class QVM(QuantumComputer):
 
-    def __init__(self, name, qubit_topology:nx.Graph, supported_gates, connection=None):
-        self.name=name
+    def __init__(self, name, qubit_topology: nx.Graph, supported_gates, connection=None):
+        self.name = name
         self.qubit_topology = qubit_topology
         self.supported_gates = supported_gates
-        self.compile_by_default=False
+        self.compile_by_default = False
         super().__init__(connection=connection)
 
     def _wrap_payload(self, program):
@@ -104,13 +103,12 @@ class QVM(QuantumComputer):
                 elif len(qubits) == 1:
                     q = qubits[0]
                     if not q in self.qubit_topology.nodes:
-                        raise QVMError(f"The qubit {q} is not in the emulated qubit topology for {self.name}")
+                        raise QVMError(
+                            f"The qubit {q} is not in the emulated qubit topology for {self.name}")
                 elif len(qubits) == 2:
                     if not tuple(qubits) in self.qubit_topology.edges:
-                        raise QVMError(f"The qubit pair {qubits} is not in the emulated qubit topology for {self.name}")
-
-
-
+                        raise QVMError(
+                            f"The qubit pair {qubits} is not in the emulated qubit topology for {self.name}")
 
     def _run_payload(self, quil_program, classical_addresses, trials, isa):
         if not isinstance(quil_program, Program):
@@ -121,7 +119,6 @@ class QVM(QuantumComputer):
 
         if self.qubit_topology is not None:
             self._check_respects_topology(quil_program)
-
 
         # TODO Noise model
         # if self.noise_model is not None:
@@ -166,11 +163,14 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
         if imitate is not None:
             raise NotImplementedError
         else:
-            gateset = ['CZ']
+            oneq_gates = ['X(pi/2)', 'X(-pi/2)', 'RZ(theta)', 'I']
+            twoq_gates = ['CZ']
 
         modifier_str += 'g'
     else:
-        gateset = None
+        oneq_gates = None
+        twoq_gates = None
+
 
     if noncontiguous_qubits:
         if imitate is not None:
@@ -185,6 +185,8 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
     else:
         pass
 
+    isa = isa_from_graph(graph=topo, oneq_gates=oneq_gates, twoq_gates=twoq_gates)
+
     if with_noise:
         raise NotImplementedError
 
@@ -198,14 +200,14 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
     name_parts += ['qvm']
     name = '-'.join(name_parts)
 
-    return QVM(name=name, qubit_topology=topo, supported_gates=gateset, connection=connection)
+    return QVM(name=name, isa=isa, connection=connection)
 
 
 class QPU(QuantumComputer):
 
-    def __init__(self, name, qubit_topology, connection=None):
+    def __init__(self, name, isa, connection=None):
         self.name = name
-        self.qubit_topology = qubit_topology
+        self.isa = isa
         self.compile_by_default = True
         super().__init__(connection=connection)
 
@@ -233,12 +235,6 @@ def get_qpu(name, connection=None):
     if connection is None:
         connection = Connection()
 
-    devices = connection.get_devices().json()['devices']
-    try:
-        device = devices[name]
-    except KeyError:
-        raise KeyError(f"The device named {name} does not exist or is not available.")
-
-    isa = ISA.from_dict(device['isa'])
-    topo = isa.topology()
-    return QPU(name=name, qubit_topology=topo, connection=connection)
+    device_data = connection.get_device_data(name=name)
+    isa = ISA.from_api(device_data['isa'])
+    return QPU(name=name, isa=isa, connection=connection)

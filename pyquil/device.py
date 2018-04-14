@@ -13,8 +13,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 ##############################################################################
-from collections import namedtuple
-from typing import Union
+from collections import namedtuple, OrderedDict
+from typing import Union, List, Optional, Dict
 
 import networkx as nx
 import numpy as np
@@ -29,21 +29,24 @@ THETA = Parameter("theta")
 DEFAULT_QUBIT_TYPE = "Xhalves"
 DEFAULT_EDGE_TYPE = "CZ"
 
-Qubit = namedtuple("Qubit", ["id", "type", "dead"])
-Edge = namedtuple("Edge", ["targets", "type", "dead"])
-_ISA = namedtuple("_ISA", ["qubits", "edges"])
 QubitSpecs = namedtuple("QubitSpecs", ["id", "fRO", "f1QRB", "T1", "T2"])
 EdgeSpecs = namedtuple("EdgeSpecs", ["targets", "fBellState", "fCZ", "fCPHASE"])
 _Specs = namedtuple("_Specs", ["qubits_specs", "edges_specs"])
 
+Thing = namedtuple("Thing", ['supported_gates'])
 
-class ISA(_ISA):
+
+class ISA:
     """
     Basic Instruction Set Architecture specification.
 
     :ivar Sequence[Qubit] qubits: The qubits associated with the ISA.
     :ivar Sequence[Edge] edges: The multi-qubit gates.
     """
+
+    def __init__(self, nodes, edges):
+        self.nodes = nodes
+        self.edges = edges
 
     def to_dict(self):
         """
@@ -79,7 +82,7 @@ class ISA(_ISA):
         """
 
         def _maybe_configure(o, t):
-            # type: (Union[Qubit,Edge], str) -> dict
+            # type: (Union[IsaNode,IsaEdge], str) -> dict
             """
             Exclude default values from generated dictionary.
 
@@ -95,13 +98,13 @@ class ISA(_ISA):
             return d
 
         return {
-            "1Q": {"{}".format(q.id): _maybe_configure(q, DEFAULT_QUBIT_TYPE) for q in self.qubits},
+            "1Q": {"{}".format(q.id): _maybe_configure(q, DEFAULT_QUBIT_TYPE) for q in self.nodes},
             "2Q": {"{}-{}".format(*edge.targets): _maybe_configure(edge, DEFAULT_EDGE_TYPE)
                    for edge in self.edges}
         }
 
     @staticmethod
-    def from_dict(d):
+    def from_api(d):
         """
         Re-create the ISA from a dictionary representation.
 
@@ -109,18 +112,40 @@ class ISA(_ISA):
         :return: The restored ISA.
         :rtype: ISA
         """
-        return ISA(
-            qubits=sorted([Qubit(id=int(qid),
-                                 type=q.get("type", DEFAULT_QUBIT_TYPE),
-                                 dead=q.get("dead", False))
-                           for qid, q in d["1Q"].items()],
-                          key=lambda qubit: qubit.id),
-            edges=sorted([Edge(targets=[int(q) for q in eid.split('-')],
-                               type=e.get("type", DEFAULT_EDGE_TYPE),
-                               dead=e.get("dead", False))
-                          for eid, e in d["2Q"].items()],
-                         key=lambda edge: edge.targets),
-        )
+        one_qs = sorted(int(q) for q in d['1Q'].keys())
+        two_qs = sorted(tuple(int(q) for q in qq) for qq in d['2Q'].keys())
+        isa = OrderedDict()
+        for one_q in one_qs:
+            v = d['1Q'][str(one_q)]
+            if v.get("dead", False):
+                continue
+
+            # TODO: sensible API
+            if 'type' not in v or v['type'] == 'Xhalves':
+                # TODO: figure out how to represent supported gates.
+                supported_gates = ['X(pi/2)', 'X(-pi/2)', 'RZ(theta)', 'I']
+            else:
+                raise ValueError(f"Unknown gate type {v['type']}")
+
+            isa[tuple(one_q)] = Thing(supported_gates=supported_gates)
+
+        for two_q in two_qs:
+            v = d['1Q']['-'.join(str(q) for q in two_q)]
+            if v.get("dead", False):
+                continue
+
+            if 'type' not in v:
+                supported_gates = ['CZ']
+            elif v['type'] == 'CZ':
+                supported_gates = ['CZ']
+            elif v['type'] == 'CPHASE':
+                supported_gates = ['CZ', 'CPHASE']
+            else:
+                raise ValueError(f"Unknown gate type {v['type']}")
+
+            isa[two_q] = Thing(supported_gates=supported_gates)
+
+        return isa
 
     def topology(self):
         return nx.from_edgelist(e.targets for e in self.edges)
@@ -166,6 +191,16 @@ def gates_in_isa(isa):
     return gates
 
 
+def isa_from_graph(graph: nx.Graph, oneq_gates=None, twoq_gates=None):
+    isa = OrderedDict()
+
+    for q in graph.nodes:
+        isa[tuple(q)] = oneq_gates
+
+    for q1, q2 in graph.edges:
+        isa[q1, q2] = twoq_gates
+
+
 class Specs(_Specs):
     """
     Basic specifications for the device, such as gate fidelities and coherence times.
@@ -173,6 +208,7 @@ class Specs(_Specs):
     :ivar List[QubitSpecs] qubits_specs: The specs associated with individual qubits.
     :ivar List[EdgesSpecs] edges_specs: The specs associated with edges, or qubit-qubit pairs.
     """
+
     def f1QRBs(self):
         """
         Get a dictionary of single-qubit randomized benchmarking fidelities (normalized to unity)
@@ -336,6 +372,7 @@ class Device(object):
     :ivar ISA isa: The instruction set architecture (ISA) for the device.
     :ivar NoiseModel noise_model: The noise model for the device.
     """
+
     def __init__(self, name, raw):
         """
         :param name: name of the device

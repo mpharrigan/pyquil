@@ -268,7 +268,17 @@ class Connection:
         response = get_json(self.session, self.async_endpoint + "/job/" + job_id)
         return Job(response.json(), 'QVM')
 
-
-    def get_devices(self):
+    def list_devices(self):
         response = get_json(self.session, self.async_endpoint + '/devices')
-        return response
+        devices = response.json()['devices']
+        return sorted(devices.keys())
+
+    def get_device_data(self, name):
+        response = get_json(self.session, self.async_endpoint + '/devices')
+        devices = response.json()['devices']
+        try:
+            device = devices[name]
+        except KeyError:
+            raise KeyError(f"The device named {name} does not exist or is not available.")
+
+        return device

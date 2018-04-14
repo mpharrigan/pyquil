@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pyquil.device import (Device, ISA, Qubit, Edge, Specs, QubitSpecs,
+from pyquil.device import (Device, ISA, IsaNode, IsaEdge, Specs, QubitSpecs,
                            EdgeSpecs, THETA, gates_in_isa)
 from pyquil.noise import NoiseModel, KrausModel
 from pyquil.gates import RZ, RX, I, CZ, ISWAP, CPHASE
@@ -87,16 +87,16 @@ def test_isa(isa_dict):
     isa = ISA.from_dict(isa_dict)
     assert isa == ISA(
         qubits=[
-            Qubit(id=0, type='Xhalves', dead=False),
-            Qubit(id=1, type='Xhalves', dead=False),
-            Qubit(id=2, type='Xhalves', dead=False),
-            Qubit(id=3, type='Xhalves', dead=True),
+            IsaNode(id=0, type='Xhalves', dead=False),
+            IsaNode(id=1, type='Xhalves', dead=False),
+            IsaNode(id=2, type='Xhalves', dead=False),
+            IsaNode(id=3, type='Xhalves', dead=True),
         ],
         edges=[
-            Edge(targets=[0, 1], type='CZ', dead=False),
-            Edge(targets=[0, 3], type='CZ', dead=True),
-            Edge(targets=[1, 2], type='ISWAP', dead=False),
-            Edge(targets=[2, 0], type='CPHASE', dead=False),
+            IsaEdge(targets=[0, 1], type='CZ', dead=False),
+            IsaEdge(targets=[0, 3], type='CZ', dead=True),
+            IsaEdge(targets=[1, 2], type='ISWAP', dead=False),
+            IsaEdge(targets=[2, 0], type='CPHASE', dead=False),
         ])
     assert isa == ISA.from_dict(isa.to_dict())
 
