@@ -171,7 +171,6 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
         oneq_gates = None
         twoq_gates = None
 
-
     if noncontiguous_qubits:
         if imitate is not None:
             if imitate not in ['19Q-Acorn']:
@@ -229,6 +228,13 @@ class QPU(QuantumComputer):
                 "addresses": list(classical_addresses),
                 "trials": trials,
                 "compiled-quil": quil_program.out()}
+
+
+def list_qpus(connection=None):
+    if connection is None:
+        connection = Connection()
+
+    return connection.list_devices()
 
 
 def get_qpu(name, connection=None):
