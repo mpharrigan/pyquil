@@ -78,6 +78,9 @@ class QuantumComputer:
         job = self.connection.wait_for_job(job_id)
         return job.result()
 
+    def __repr__(self):
+        return f'<[{self.__class__.__name__}] {self.name}>'
+
 
 class QVM(QuantumComputer):
 

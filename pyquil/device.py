@@ -113,7 +113,7 @@ class ISA:
         :rtype: ISA
         """
         one_qs = sorted(int(q) for q in d['1Q'].keys())
-        two_qs = sorted(tuple(int(q) for q in qq) for qq in d['2Q'].keys())
+        two_qs = sorted(tuple(int(q) for q in qq.split('-')) for qq in d['2Q'].keys())
         isa = OrderedDict()
         for one_q in one_qs:
             v = d['1Q'][str(one_q)]
@@ -127,10 +127,10 @@ class ISA:
             else:
                 raise ValueError(f"Unknown gate type {v['type']}")
 
-            isa[tuple(one_q)] = Thing(supported_gates=supported_gates)
+            isa[(one_q,)] = Thing(supported_gates=supported_gates)
 
         for two_q in two_qs:
-            v = d['1Q']['-'.join(str(q) for q in two_q)]
+            v = d['2Q']['-'.join(str(q) for q in two_q)]
             if v.get("dead", False):
                 continue
 
