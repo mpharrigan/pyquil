@@ -91,12 +91,9 @@ class QuantumComputer:
 
 class QVM(QuantumComputer):
 
-    def __init__(self, name, qubit_topology: nx.Graph, supported_gates, connection=None):
-        self.name = name
-        self.qubit_topology = qubit_topology
-        self.supported_gates = supported_gates
+    def __init__(self, name, isa, connection=None):
+        super().__init__(name=name, isa=isa, connection=connection)
         self.compile_by_default = False
-        super().__init__(connection=connection)
 
     def _wrap_payload(self, program):
         return {

@@ -199,10 +199,12 @@ def isa_from_graph(graph: nx.Graph, oneq_gates=None, twoq_gates=None):
     isa = OrderedDict()
 
     for q in graph.nodes:
-        isa[tuple(q)] = oneq_gates
+        isa[(q,)] = oneq_gates
 
     for q1, q2 in graph.edges:
         isa[q1, q2] = twoq_gates
+
+    return isa
 
 
 class Specs(_Specs):
