@@ -6,7 +6,7 @@ from six import integer_types
 from pyquil import Program
 from pyquil.api._base_connection import Connection, validate_run_items, TYPE_MULTISHOT
 from pyquil.api.errors import QVMError
-from pyquil.device import ISA, isa_from_graph
+from pyquil.device import ISA, isa_from_graph, isa_to_graph
 from pyquil.noise import apply_noise_model
 from pyquil.quilbase import Gate
 
@@ -212,6 +212,11 @@ class QPU(QuantumComputer):
         self.isa = isa
         self.compile_by_default = True
         super().__init__(connection=connection)
+
+    def chip_topology(self):
+        # TODO: promote to superclass
+        # TODO: rename to remove "chip"
+        return isa_to_graph(self.isa)
 
     def _wrap_payload(self, program):
         return {

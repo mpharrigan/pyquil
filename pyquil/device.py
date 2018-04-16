@@ -151,6 +151,10 @@ class ISA:
         return nx.from_edgelist(e.targets for e in self.edges)
 
 
+def isa_to_graph(isa):
+    return nx.from_edgelist(k for k in isa.keys() if len(k) == 2)
+
+
 def gates_in_isa(isa):
     """
     Generate the full gateset associated with an ISA.
