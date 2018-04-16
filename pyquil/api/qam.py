@@ -16,10 +16,12 @@ class QuantumComputer:
     Represents an abstract quantum computer
     """
 
-    def __init__(self, connection=None):
+    def __init__(self, name, isa, connection=None):
         if connection is None:
             connection = Connection()
 
+        self.name = name
+        self.isa = isa
         self.connection = connection
         self.compile_by_default = NotImplemented
 
@@ -80,6 +82,11 @@ class QuantumComputer:
 
     def __repr__(self):
         return f'<[{self.__class__.__name__}] {self.name}>'
+
+    def chip_topology(self):
+        # TODO: promote to superclass
+        # TODO: rename to remove "chip"
+        return isa_to_graph(self.isa)
 
 
 class QVM(QuantumComputer):
@@ -208,15 +215,8 @@ def get_qvm(*, imitate=None, restrict_topology=False, restrict_gateset=False,
 class QPU(QuantumComputer):
 
     def __init__(self, name, isa, connection=None):
-        self.name = name
-        self.isa = isa
+        super().__init__(name=name, isa=isa, connection=connection)
         self.compile_by_default = True
-        super().__init__(connection=connection)
-
-    def chip_topology(self):
-        # TODO: promote to superclass
-        # TODO: rename to remove "chip"
-        return isa_to_graph(self.isa)
 
     def _wrap_payload(self, program):
         return {
