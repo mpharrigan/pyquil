@@ -615,6 +615,12 @@ def test_numpy_integer_types():
     PauliTerm("X", idx_np)
 
 
+def test_able_to_exponentiate_numpy_ints():
+    pt = sZ(np.arange(1)[0])
+    prog = exponential_map(pt)(0.3)
+    assert prog.out() == "RZ(0.6) 0\n"
+
+
 def test_simplify():
     t1 = sZ(0) * sZ(1)
     t2 = sZ(0) * sZ(1)

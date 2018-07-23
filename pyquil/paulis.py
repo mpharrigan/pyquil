@@ -79,6 +79,8 @@ class PauliTerm(object):
         """
         assert op in PAULI_OPS
         assert _valid_qubit(index)
+        if isinstance(index, integer_types):
+            index = int(index)  # cast numpy ints to python ints
 
         self._ops = OrderedDict()
         if op != "I":
