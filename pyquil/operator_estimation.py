@@ -82,6 +82,9 @@ class TensorProductState:
                 return oneq_state
         raise IndexError()
 
+    def __iter__(self):
+        yield from self.states
+
     def __len__(self):
         return len(self.states)
 
@@ -104,7 +107,11 @@ class TensorProductState:
         return TensorProductState(tuple(_OneQState.from_str(x) for x in s.split('*')))
 
 
-def vacuum():
+def is_vacuum(state: TensorProductState):
+    return len(state) == 0
+
+
+def vacuum(q=None):
     return TensorProductState(tuple())
 
 
